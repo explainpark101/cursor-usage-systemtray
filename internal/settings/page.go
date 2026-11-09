@@ -1,0 +1,6 @@
+package settings
+
+import _ "embed"
+
+//go:embed page.html
+var pageHTML string

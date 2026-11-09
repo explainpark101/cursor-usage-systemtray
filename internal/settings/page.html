@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: #16161a; color: #e8e8ec;
+    padding: 20px; font-size: 13px; line-height: 1.5;
+  }
+  h1 { font-size: 15px; margin-bottom: 16px; }
+  h2 { font-size: 12px; color: #9a9aa2; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .05em; }
+  .card { background: #1f1f24; border: 1px solid #2c2c33; border-radius: 8px; padding: 14px; margin-bottom: 4px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+  .row label { color: #b8b8c0; }
+  button {
+    background: #2c2c33; color: #e8e8ec; border: 1px solid #3a3a42;
+    border-radius: 6px; padding: 7px 12px; font-size: 12px; cursor: pointer;
+  }
+  button:hover { background: #38383f; }
+  button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  button.primary:hover { background: #1d4ed8; }
+  button.danger { background: transparent; border-color: #7f1d1d; color: #f87171; }
+  input[type=number] {
+    width: 80px; background: #16161a; color: #e8e8ec;
+    border: 1px solid #3a3a42; border-radius: 6px; padding: 5px 8px;
+  }
+  textarea {
+    width: 100%; height: 70px; background: #16161a; color: #e8e8ec;
+    border: 1px solid #3a3a42; border-radius: 6px; padding: 8px;
+    font-family: monospace; font-size: 11px; resize: vertical;
+  }
+  .status { font-weight: 600; }
+  .ok { color: #4ade80; } .bad { color: #f87171; } .muted { color: #9a9aa2; }
+  #msg { min-height: 18px; font-size: 12px; margin-top: 10px; }
+  #msg.err { color: #f87171; } #msg.info { color: #93c5fd; }
+  .hint { color: #6b6b74; font-size: 11px; margin-top: 6px; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  a { color: #93c5fd; }
+  .hidden { display: none; }
+  .file-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .usage-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .usage-cell { background: #16161a; border: 1px solid #2c2c33; border-radius: 6px; padding: 10px 8px; text-align: center; }
+  .usage-cell .label { color: #9a9aa2; font-size: 11px; margin-bottom: 4px; }
+  .usage-cell .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Cursor Tray 설정</h1>
+
+<div class="card">
+  <h2>로그인</h2>
+  <div class="row">
+    <label>상태</label>
+    <span id="loginState" class="status">확인 중…</span>
+  </div>
+  <div class="row">
+    <span class="hint">cursor.com 계정으로 로그인하면 세션 쿠키가 이 기기에 암호화되어 저장됩니다.</span>
+  </div>
+  <div class="row">
+    <button class="primary" id="btnLogin" onclick="doLogin()">cursor.com 로그인…</button>
+    <button class="danger hidden" id="btnLogout" onclick="doLogout()">로그아웃</button>
+  </div>
+  <details style="margin-top:10px">
+    <summary style="cursor:pointer;color:#9a9aa2;font-size:12px">고급: 쿠키 직접 입력</summary>
+    <p class="hint">
+      Cookie 헤더 또는 Netscape/curl <code>cookies.txt</code>를 넣으세요.
+      <code>WorkosCursorSessionToken</code>이 필요합니다.
+      (<a href="https://curl.se/docs/http-cookies.html" target="_blank" rel="noopener">cookie file format</a>)
+    </p>
+    <textarea id="manualCookie" placeholder="WorkosCursorSessionToken=...&#10;또는 cookies.txt 내용"></textarea>
+    <div class="file-row">
+      <button type="button" onclick="doImportCookieFile()">cookies.txt 파일 선택…</button>
+      <button onclick="doSaveCookie()">쿠키 저장</button>
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <h2>사용량</h2>
+  <div class="row">
+    <span id="usageStatus" class="hint">불러오는 중…</span>
+    <button type="button" onclick="doRefreshUsage()">새로고침</button>
+  </div>
+  <div id="usageGrid" class="usage-grid hidden">
+    <div class="usage-cell"><div class="label">Total</div><div class="value" id="uTotal">—</div></div>
+    <div class="usage-cell"><div class="label">Auto</div><div class="value" id="uAuto">—</div></div>
+    <div class="usage-cell"><div class="label">API</div><div class="value" id="uApi">—</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>동작</h2>
+  <div class="row">
+    <label for="interval">사용량 확인 주기 (초)</label>
+    <input type="number" id="interval" min="5" max="3600" step="5">
+  </div>
+  <div class="row">
+    <label for="autostart">Windows 시작 시 자동 실행</label>
+    <input type="checkbox" id="autostart">
+  </div>
+</div>
+
+<div id="msg"></div>
+
+<div class="actions">
+  <button onclick="closeWindow()">닫기</button>
+</div>
+
+<script>
+function showMsg(text, isErr) {
+  const el = document.getElementById('msg');
+  el.textContent = text || '';
+  el.className = isErr ? 'err' : 'info';
+}
+function fmtPct(n) {
+  if (typeof n !== 'number' || Number.isNaN(n)) return '—';
+  return n.toFixed(1) + '%';
+}
+function render(state) {
+  const s = document.getElementById('loginState');
+  if (state.loggedIn) { s.textContent = '로그인됨'; s.className = 'status ok'; }
+  else { s.textContent = '로그인 필요'; s.className = 'status bad'; }
+  document.getElementById('btnLogout').classList.toggle('hidden', !state.loggedIn);
+  document.getElementById('interval').value = state.pollIntervalSeconds;
+  document.getElementById('autostart').checked = state.autoStart;
+
+  const grid = document.getElementById('usageGrid');
+  const st = document.getElementById('usageStatus');
+  if (state.usage) {
+    grid.classList.remove('hidden');
+    st.textContent = '현재 주기 사용량';
+    st.className = 'hint';
+    document.getElementById('uTotal').textContent = fmtPct(state.usage.totalPercent);
+    document.getElementById('uAuto').textContent = fmtPct(state.usage.autoPercent);
+    document.getElementById('uApi').textContent = fmtPct(state.usage.apiPercent);
+  } else {
+    grid.classList.add('hidden');
+    if (state.usageError) {
+      st.textContent = state.usageError;
+      st.className = 'hint bad';
+    } else if (!state.loggedIn) {
+      st.textContent = '로그인 후 사용량이 표시됩니다.';
+      st.className = 'hint muted';
+    } else {
+      st.textContent = '사용량 없음';
+      st.className = 'hint muted';
+    }
+  }
+}
+async function refresh() { render(await getState()); }
+
+async function boot() {
+  // Paint immediately from the tray/poller cache (no network).
+  try { render(await getState()); } catch (e) { showMsg(String(e), true); }
+  // Then refresh usage in the background without blocking first paint.
+  try { render(await refreshUsage()); } catch (_) { /* keep cached view */ }
+}
+
+async function doLogin() {
+  showMsg('로그인 창을 여는 중…');
+  try {
+    const state = await login();
+    render(state);
+    if (state.loggedIn) showMsg('로그인되었습니다.');
+    else showMsg('로그인이 취소되었습니다.');
+  } catch (e) { showMsg('로그인 실패: ' + e, true); }
+}
+async function doLogout() {
+  render(await logout());
+  showMsg('로그아웃되었습니다.');
+}
+async function doSaveCookie() {
+  const v = document.getElementById('manualCookie').value;
+  try {
+    render(await saveCookie(v));
+    showMsg('쿠키가 저장되었고 사용량을 확인했습니다.');
+  } catch (e) { showMsg('저장 실패: ' + e, true); }
+}
+async function doImportCookieFile() {
+  try {
+    const r = await pickCookieFile();
+    if (r.cancelled) return;
+    document.getElementById('manualCookie').value = r.content;
+    render(await saveCookie(r.content));
+    showMsg('cookies.txt에서 쿠키를 가져와 검증했습니다.');
+  } catch (e) {
+    showMsg('파일 가져오기 실패: ' + e, true);
+  }
+}
+async function doRefreshUsage() {
+  showMsg('사용량을 새로고침하는 중…');
+  try {
+    render(await refreshUsage());
+    showMsg('사용량을 갱신했습니다.');
+  } catch (e) { showMsg('갱신 실패: ' + e, true); }
+}
+document.getElementById('interval').addEventListener('change', async ev => {
+  try { await setPollInterval(parseInt(ev.target.value, 10)); showMsg('확인 주기가 저장되었습니다.'); }
+  catch (e) { showMsg(e, true); refresh(); }
+});
+document.getElementById('autostart').addEventListener('change', async ev => {
+  try { await setAutoStart(ev.target.checked); showMsg('저장되었습니다.'); }
+  catch (e) { showMsg('저장 실패: ' + e, true); }
+});
+boot();
+</script>
+</body>
+</html>
