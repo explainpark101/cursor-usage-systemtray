@@ -1,0 +1,98 @@
+name: Build Installer
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    name: Inno Setup (x86_64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read app version from go.mod
+        id: version
+        shell: pwsh
+        run: |
+          $line = Select-String -Path go.mod -Pattern '^// Version:\s+(\S+)' | Select-Object -First 1
+          if (-not $line) { throw "Could not read '// Version: x.y.z' from go.mod" }
+          $ver = $line.Matches[0].Groups[1].Value
+          Write-Host "APP_VERSION=$ver"
+          "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found at $iscc after Chocolatey install"
+          }
+          Write-Host "ISCC=$iscc"
+
+      - name: Build binaries and installer
+        shell: cmd
+        run: build.bat
+
+      - name: Verify installer artifact
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          $setup = "dist\cursor-tray-setup-x86_64-$ver.exe"
+          if (-not (Test-Path $setup)) {
+            Get-ChildItem dist -ErrorAction SilentlyContinue | Format-Table Name, Length
+            throw "Expected installer missing: $setup"
+          }
+          Get-Item $setup | Format-List FullName, Length, LastWriteTime
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursor-tray-setup-x86_64-${{ steps.version.outputs.version }}
+          path: dist/cursor-tray-setup-x86_64-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+
+      - name: Upload portable binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursor-tray-portable-${{ steps.version.outputs.version }}
+          path: |
+            dist/cursor-tray-x86_64-${{ steps.version.outputs.version }}.exe
+            dist/cursor-tray-arm64-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: windows-installer
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
