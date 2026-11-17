@@ -39,7 +39,8 @@ func dir() (string, error) {
 	return filepath.Join(base, "cursor-tray"), nil
 }
 
-// Open loads (or initializes) the store under %LOCALAPPDATA%\cursor-tray.
+// Open loads (or initializes) the store under %LOCALAPPDATA%\cursor-tray
+// (Windows) or ~/Library/Application Support/cursor-tray (macOS).
 func Open() (*Store, error) {
 	d, err := dir()
 	if err != nil {

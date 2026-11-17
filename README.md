@@ -1,78 +1,122 @@
-# Cursor Tray
+# Cursor Tray (macOS / RunCat Neo)
 
-Windows 시스템 트레이 전용 Cursor 사용량 모니터. 작업표시줄에 표시되지 않으며,
-10초마다 `cursor.com` 사용량을 가져와 트레이 아이콘에 사용률(%)을 표시합니다.
+이 브랜치(`macos/runcat-neo`)는 Windows 트레이 UI 대신 **[RunCat Neo](https://github.com/runcat-dev/RunCatNeo) Custom Metrics** JSON을 갱신합니다.
 
-## 특징
+Cursor 사용량을 폴링한 뒤, RunCat Neo가 감시할 수 있는 스키마의 JSON 파일을 원자적으로 기록합니다.
 
-- **트레이 전용**: `-H windowsgui` 빌드, 작업표시줄/콘솔 창 없음
-- **아이콘에 사용률 표시**: 16×16 아이콘에 숫자 + 색상 바(70% 노랑, 90% 빨강)
-- **10초 폴 + 지수 백오프**: 오류 시 10s→20s→…→최대 5분, 복구 시 즉시 10s 복귀
-- **401/403 감지**: 로그인 만료 시 아이콘 "!" 상태로 표시
-- **WebView2 로그인**: 설정에서 cursor.com 로그인 → 세션 쿠키 자동 캡처(검증까지 수행)
-- **쿠키는 DPAPI 암호화** 저장 (`%LOCALAPPDATA%\cursor-tray\cookies.bin`)
-- **최소 자원**: 상주 RAM 목표 ~5–15MB, WebView2는 로그인/설정 창이 열린 동안에만 존재
-- **고급: 쿠키 수동 입력** — Cookie 헤더 또는 Netscape/curl `cookies.txt` 파일/붙여넣기 지원
+스키마: [CustomMetricsSchema.md](https://github.com/runcat-dev/RunCatNeo/blob/main/docs/CustomMetricsSchema.md)
 
-## 사용법
+## 출력 예시
 
-1. `dist\cursor-tray-x86_64-<version>.exe`(또는 arm64)를 아무 폴더에 배치하고 실행
-2. 트레이에 아이콘 출현 → 우클릭 → **설정…**
-3. **cursor.com 로그인…** 클릭 → 로그인 완료되면 자동으로 캡처되어 저장
-   (로그인 창은 쿠키 검증 성공 즉시 닫힘)
-4. 트레이 아이콘이 사용률(%)로 갱신됨
-
-### 트레이 메뉴
-
-- **사용량**: 최근 Total/Auto/API 표시 (읽기 전용)
-- **새로고침**: 즉시 다시 폴
-- **설정…**: 로그인/로그아웃, 쿠키 수동 입력, 폴 주기(기본 10초), 시작 프로그램 등록
-- **종료**
-
-### 저장 위치
-
-- `%LOCALAPPDATA%\cursor-tray\config.json` — 설정
-- `%LOCALAPPDATA%\cursor-tray\cookies.bin` — DPAPI 암호화 쿠키
-- `%LOCALAPPDATA%\cursor-tray\webview\` — 설정 창 WebView2 프로필
-- `%LOCALAPPDATA%\cursor-tray\webview-login\` — 로그인 창 WebView2 프로필(설정과 분리)
-- exe 옆 `cursor-tray.log` — 로그
-
-## 빌드
-
-Windows + Go 1.23+ + [Inno Setup 6](https://jrsoftware.org/isdl.php):
-
-```
-build.bat
+```json
+{
+  "title": "Cursor",
+  "symbol": "sparkles",
+  "metricsBarValue": "42%",
+  "metrics": [
+    { "title": "Total", "formattedValue": "42%", "normalizedValue": 0.42 },
+    { "title": "Auto",  "formattedValue": "35%", "normalizedValue": 0.35 },
+    { "title": "API",   "formattedValue": "8%",  "normalizedValue": 0.08 }
+  ],
+  "lastUpdatedDate": "2026-11-17T04:50:40Z"
+}
 ```
 
-버전은 `go.mod`의 `// Version: x.y.z` 한 줄에서 읽습니다. 빌드 산출물 파일명에도 버전이 포함됩니다.
+기본 출력 경로: `~/Library/Application Support/cursor-tray/runcat-usage.json`  
+(`RUNCAT_OUT_FILE` 또는 `-out`으로 변경 가능)
 
-산출물 (`dist\`, 예: 버전 `1.0.1`):
+## 설치 / 사용
 
-- `cursor-tray-x86_64-1.0.1.exe` / `cursor-tray-arm64-1.0.1.exe` — 포터블 실행 파일
-- `cursor-tray-setup-x86_64-1.0.1.exe` — Inno Setup 설치 파일 (x86_64)
+### 1. 빌드
 
-또는 수동 빌드만:
-
+```bash
+chmod +x build-mac.sh
+./build-mac.sh
 ```
-go build -ldflags="-s -w -H windowsgui" -o cursor-tray.exe ./cmd/cursor-tray
+
+산출물 (`dist/`):
+
+- `cursor-tray-darwin-arm64-<ver>` / `amd64` / `universal` — ad-hoc 서명된 바이너리
+- `cursor-tray-macos-<ver>.zip` — 설치용 패키지 (`bin/`, `install.sh`, launchd plist)
+- `cursor-tray` — 현재 머신용 바로 실행 바이너리
+
+```bash
+# zip 풀고 설치
+unzip dist/cursor-tray-macos-*.zip
+cd dist/stage-macos-*
+./install.sh            # → ~/.local/bin/cursor-tray
+./install.sh --launchd  # 로그인 시 자동 실행까지
+
+# 또는 빌드와 동시에 설치
+./build-mac.sh --install
 ```
+
+### 2. 쿠키 저장
+
+macOS에는 WebView2 로그인이 없으므로 Cookie 헤더 또는 Netscape/`cookies.txt`를 넣습니다.
+
+```bash
+cursor-tray set-cookie -f ~/Downloads/cookies.txt
+# 또는
+cursor-tray set-cookie 'WorkosCursorSessionToken=...'
+# 또는
+export CURSOR_COOKIE='WorkosCursorSessionToken=...'
+```
+
+### 3. 실행
+
+```bash
+# 한 번만 갱신
+cursor-tray once
+
+# 백그라운드 폴링 (기본 10초, 실패 시 지수 백오프)
+cursor-tray
+```
+
+### 4. RunCat Neo에 연결
+
+1. RunCat Neo → **Settings → Metrics → Custom Metrics**
+2. **Add Custom Metrics Source**
+3. `~/Library/Application Support/cursor-tray/runcat-usage.json` 선택
+4. (선택) Metrics Bar에서 해당 소스 토글을 켜면 `metricsBarValue`(Total %)가 메뉴바에 표시됩니다
+
+### 5. launchd (로그인 시 자동 실행)
+
+```bash
+cp launchd/dev.cursor-tray.runcat.plist ~/Library/LaunchAgents/
+# plist 안의 /Users/YOU 경로를 본인 홈·바이너리 경로로 수정
+launchctl load ~/Library/LaunchAgents/dev.cursor-tray.runcat.plist
+```
+
+## CLI
+
+| 명령 | 설명 |
+|------|------|
+| `cursor-tray` | 폴링 데몬 |
+| `cursor-tray once [-out PATH]` | 1회 갱신 후 종료 |
+| `cursor-tray set-cookie [-f file \| cookie…]` | 쿠키 저장 |
+| `cursor-tray clear-cookie` | 쿠키 삭제 |
+| `cursor-tray version` | 버전 출력 |
+
+플래그: `-out`, `-interval` (초)
+
+## 저장 위치
+
+- `~/Library/Application Support/cursor-tray/config.json`
+- `~/Library/Application Support/cursor-tray/cookies.bin` (macOS에서는 평문 저장; 파일 모드 0600)
+- `~/Library/Application Support/cursor-tray/runcat-usage.json` — RunCat Neo가 읽는 메트릭
+- `~/Library/Application Support/cursor-tray/cursor-tray.log`
 
 ## 아키텍처
 
 ```
-cmd/cursor-tray/      진입점 (트레이 + 폴리 조립)
-internal/tray/        트레이 아이콘 렌더링(3x5 픽셀 폰트), 툴팁, 메뉴
-internal/poller/      10s 폴, 지수 백오프, 401 처리
-internal/cursorapi/   POST /api/dashboard/get-current-period-usage
-internal/auth/        WebView2 로그인 + 쿠키 캡처(DevTools Network.getAllCookies)
-internal/settings/    설정 창 (HTML UI, Go 바인딩)
-internal/storage/     config + DPAPI(CryptProtectData)
-internal/autostart/   HKCU Run 키 등록
-internal/webview2/    go-webview2 내장 포크(COM 바인딩 확장 포함, MIT)
-internal/win32/       Win32 API 바인딩 (go-webview2 내장)
+cursorapi  →  poller  →  runcat.WriteAtomic(runcat-usage.json)
+                              ↑
+                     RunCat Neo (FSEvents watch)
 ```
 
-`internal/webview2`, `internal/win32`는 [go-webview2](https://github.com/jchv/go-webview2)(MIT, John Chadwick)의
-`pkg/edge`, `internal/w32`, `webviewloader`를 기반으로 하며, DevTools 프로토콜 콜백 바인딩이 추가되었습니다.
-라이선스 원문은 `internal/webview2/LICENSE-*` 참조.
+- `internal/runcat` — Custom Metrics 스키마 + atomic write (`tmp` → `mv`)
+- `internal/cursorapi` / `internal/poller` — Windows 브랜치와 동일 API 폴링
+- `cmd/cursor-tray/main_darwin.go` — macOS 진입점
+
+Windows 시스템 트레이 버전은 `main` 브랜치를 사용하세요.

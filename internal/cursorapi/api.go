@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -50,7 +51,7 @@ func Fetch(ctx context.Context, cookie string) (*PlanUsage, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://cursor.com")
 	req.Header.Set("Referer", "https://cursor.com/dashboard")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", userAgent())
 	req.Header.Set("Cookie", cookie)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -91,4 +92,13 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+func userAgent() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	default:
+		return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	}
 }
