@@ -2,6 +2,8 @@
 /dist/
 *.exe
 *.dll
+# Embedded WebView2 loader (required by go:embed in CI/builds)
+!internal/webview2/loader/sdk/**/WebView2Loader.dll
 *.syso
 
 # Logs
