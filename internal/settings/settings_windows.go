@@ -173,7 +173,7 @@ func openWindow(d Deps) error {
 	}
 	if err := w.Bind("setTrayStyle", func(style string) error {
 		switch style {
-		case "bar", "circle", "battery", "number":
+		case "bar", "circle", "battery", "number", "colored":
 		default:
 			return errors.New("지원하지 않는 트레이 모양입니다")
 		}

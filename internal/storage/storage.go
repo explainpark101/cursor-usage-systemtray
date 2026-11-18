@@ -19,6 +19,7 @@ const (
 	TrayStyleCircle  = "circle"
 	TrayStyleBattery = "battery"
 	TrayStyleNumber  = "number"
+	TrayStyleColored = "colored"
 )
 
 // Config holds user settings.
@@ -26,7 +27,7 @@ type Config struct {
 	PollIntervalSeconds int    `json:"pollIntervalSeconds"` // default 10
 	AutoStart           bool   `json:"autoStart"`
 	TrayPercent         string `json:"trayPercent"` // total|auto|api
-	TrayStyle           string `json:"trayStyle"`   // bar|circle|battery|number
+	TrayStyle           string `json:"trayStyle"`   // bar|circle|battery|number|colored
 }
 
 // Defaults for Config.
@@ -68,7 +69,7 @@ func normalizeConfig(c *Config) {
 		c.TrayPercent = DefaultConfig.TrayPercent
 	}
 	switch c.TrayStyle {
-	case TrayStyleBar, TrayStyleCircle, TrayStyleBattery, TrayStyleNumber:
+	case TrayStyleBar, TrayStyleCircle, TrayStyleBattery, TrayStyleNumber, TrayStyleColored:
 	default:
 		c.TrayStyle = DefaultConfig.TrayStyle
 	}

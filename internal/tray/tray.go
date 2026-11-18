@@ -22,7 +22,7 @@ type State struct {
 // DisplayOpts controls which usage metric and icon style the tray uses.
 type DisplayOpts struct {
 	Percent string // total|auto|api
-	Style   string // bar|circle|battery|number
+	Style   string // bar|circle|battery|number|colored
 }
 
 // Tray wraps the systray lifecycle and menu.

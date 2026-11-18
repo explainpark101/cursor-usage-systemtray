@@ -1,6 +1,6 @@
 module cursor-tray
 
-// Version: 1.1.0
+// Version: 1.1.1
 // App version for build.bat artifact names and Inno Setup. Bump this line only.
 
 go 1.25.0

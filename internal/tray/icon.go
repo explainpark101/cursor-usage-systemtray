@@ -46,6 +46,7 @@ const (
 	StyleCircle  = "circle"
 	StyleBattery = "battery"
 	StyleNumber  = "number"
+	StyleColored = "colored"
 )
 
 // 32x32 matches Windows SM_CXICON used by systray LoadImage(LR_DEFAULTSIZE).
@@ -147,6 +148,10 @@ func renderIcon(text string, percent int, fg color.RGBA, style string) []byte {
 	case StyleNumber:
 		img := newIconCanvas()
 		drawCenteredText(img, text, fg, glyphScale, 0)
+		return encodeICO(img)
+	case StyleColored:
+		img := newIconCanvas()
+		drawCenteredText(img, text, barColor(percent), glyphScale, 0)
 		return encodeICO(img)
 	default: // StyleBar
 		return renderBarIcon(text, percent, fg)
