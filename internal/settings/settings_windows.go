@@ -31,6 +31,8 @@ type state struct {
 	LoggedIn            bool        `json:"loggedIn"`
 	PollIntervalSeconds int         `json:"pollIntervalSeconds"`
 	AutoStart           bool        `json:"autoStart"`
+	TrayPercent         string      `json:"trayPercent"`
+	TrayStyle           string      `json:"trayStyle"`
 	Usage               *usageState `json:"usage"`
 	UsageError          string      `json:"usageError"`
 }
@@ -42,14 +44,14 @@ func openWindow(d Deps) error {
 	w, err := webview2.New(webview2.Options{
 		Title:    "Cursor Tray 설정",
 		Width:    460,
-		Height:   680,
+		Height:   760,
 		Center:   true,
 		DataPath: d.WebViewDataPath,
 	})
 	if err != nil {
 		return err
 	}
-	w.SetSize(460, 680, webview2.HintFixed)
+	w.SetSize(460, 760, webview2.HintFixed)
 
 	toUsageState := func(u *cursorapi.PlanUsage) *usageState {
 		if u == nil {
@@ -62,6 +64,12 @@ func openWindow(d Deps) error {
 		}
 	}
 
+	notifyDisplay := func() {
+		if d.OnDisplayChanged != nil {
+			d.OnDisplayChanged()
+		}
+	}
+
 	// Fast path: no network — used for initial paint.
 	cachedState := func() state {
 		c := d.Store.Config()
@@ -70,6 +78,8 @@ func openWindow(d Deps) error {
 			LoggedIn:            cookie != "",
 			PollIntervalSeconds: c.PollIntervalSeconds,
 			AutoStart:           autostart.Enabled(appName, d.ExePath),
+			TrayPercent:         c.TrayPercent,
+			TrayStyle:           c.TrayStyle,
 		}
 		if d.Snapshot != nil {
 			snap := d.Snapshot()
@@ -142,6 +152,38 @@ func openWindow(d Deps) error {
 	}
 	if err := w.Bind("setAutoStart", func(enabled bool) error {
 		return autostart.SetEnabled(appName, d.ExePath, enabled)
+	}); err != nil {
+		return err
+	}
+	if err := w.Bind("setTrayPercent", func(percent string) error {
+		switch percent {
+		case "total", "auto", "api":
+		default:
+			return errors.New("total, auto, api 중 하나를 선택하세요")
+		}
+		c := d.Store.Config()
+		c.TrayPercent = percent
+		if err := d.Store.SetConfig(c); err != nil {
+			return err
+		}
+		notifyDisplay()
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := w.Bind("setTrayStyle", func(style string) error {
+		switch style {
+		case "bar", "circle", "battery", "number":
+		default:
+			return errors.New("지원하지 않는 트레이 모양입니다")
+		}
+		c := d.Store.Config()
+		c.TrayStyle = style
+		if err := d.Store.SetConfig(c); err != nil {
+			return err
+		}
+		notifyDisplay()
+		return nil
 	}); err != nil {
 		return err
 	}

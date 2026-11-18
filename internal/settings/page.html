@@ -22,10 +22,12 @@
   button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   button.primary:hover { background: #1d4ed8; }
   button.danger { background: transparent; border-color: #7f1d1d; color: #f87171; }
-  input[type=number] {
-    width: 80px; background: #16161a; color: #e8e8ec;
+  input[type=number], select {
+    background: #16161a; color: #e8e8ec;
     border: 1px solid #3a3a42; border-radius: 6px; padding: 5px 8px;
   }
+  input[type=number] { width: 80px; }
+  select { min-width: 180px; max-width: 220px; }
   textarea {
     width: 100%; height: 70px; background: #16161a; color: #e8e8ec;
     border: 1px solid #3a3a42; border-radius: 6px; padding: 8px;
@@ -91,6 +93,28 @@
 </div>
 
 <div class="card">
+  <h2>표시</h2>
+  <div class="row">
+    <label for="trayPercent">트레이에 표시할 퍼센트</label>
+    <select id="trayPercent">
+      <option value="total">Total</option>
+      <option value="auto">Auto</option>
+      <option value="api">API</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="trayStyle">트레이 모양</label>
+    <select id="trayStyle">
+      <option value="bar">퍼센트 + 진행 바</option>
+      <option value="circle">원형 진행 + 숫자</option>
+      <option value="battery">배터리 아이콘 + 색상</option>
+      <option value="number">숫자만</option>
+    </select>
+  </div>
+  <p class="hint">변경 즉시 시스템 트레이 아이콘에 반영됩니다.</p>
+</div>
+
+<div class="card">
   <h2>동작</h2>
   <div class="row">
     <label for="interval">사용량 확인 주기 (초)</label>
@@ -125,6 +149,8 @@ function render(state) {
   document.getElementById('btnLogout').classList.toggle('hidden', !state.loggedIn);
   document.getElementById('interval').value = state.pollIntervalSeconds;
   document.getElementById('autostart').checked = state.autoStart;
+  if (state.trayPercent) document.getElementById('trayPercent').value = state.trayPercent;
+  if (state.trayStyle) document.getElementById('trayStyle').value = state.trayStyle;
 
   const grid = document.getElementById('usageGrid');
   const st = document.getElementById('usageStatus');
@@ -203,6 +229,14 @@ document.getElementById('interval').addEventListener('change', async ev => {
 document.getElementById('autostart').addEventListener('change', async ev => {
   try { await setAutoStart(ev.target.checked); showMsg('저장되었습니다.'); }
   catch (e) { showMsg('저장 실패: ' + e, true); }
+});
+document.getElementById('trayPercent').addEventListener('change', async ev => {
+  try { await setTrayPercent(ev.target.value); showMsg('트레이 퍼센트가 저장되었습니다.'); }
+  catch (e) { showMsg('저장 실패: ' + e, true); refresh(); }
+});
+document.getElementById('trayStyle').addEventListener('change', async ev => {
+  try { await setTrayStyle(ev.target.value); showMsg('트레이 모양이 저장되었습니다.'); }
+  catch (e) { showMsg('저장 실패: ' + e, true); refresh(); }
 });
 boot();
 </script>

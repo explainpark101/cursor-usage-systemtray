@@ -19,16 +19,23 @@ type State struct {
 	Fetching     bool
 }
 
+// DisplayOpts controls which usage metric and icon style the tray uses.
+type DisplayOpts struct {
+	Percent string // total|auto|api
+	Style   string // bar|circle|battery|number
+}
+
 // Tray wraps the systray lifecycle and menu.
 type Tray struct {
 	OnRefresh  func()
 	OnSettings func()
 	OnQuit     func()
 
-	mu      sync.Mutex
-	state   State
-	busy    bool // login / other blocking UI work
-	spinN   int
+	mu       sync.Mutex
+	state    State
+	opts     DisplayOpts
+	busy     bool // login / other blocking UI work
+	spinN    int
 	spinStop chan struct{}
 
 	mUsage    *systray.MenuItem
@@ -38,13 +45,36 @@ type Tray struct {
 }
 
 // New creates the tray wrapper. Call Run from the main goroutine.
-func New() *Tray { return &Tray{} }
+func New() *Tray {
+	return &Tray{opts: DisplayOpts{Percent: "total", Style: StyleBar}}
+}
+
+// SetDisplayOpts updates percent source / icon style and reapplies the
+// current state so the tray icon refreshes immediately.
+func (t *Tray) SetDisplayOpts(o DisplayOpts) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if o.Percent == "" {
+		o.Percent = "total"
+	}
+	if o.Style == "" {
+		o.Style = StyleBar
+	}
+	t.opts = o
+	if t.busy {
+		return
+	}
+	t.applyLocked(t.state)
+}
 
 // Run starts the tray event loop (blocks). onReady runs once initialized.
 func (t *Tray) Run(onReady func()) {
 	systray.Run(func() {
+		t.mu.Lock()
+		initStyle := t.opts.Style
+		t.mu.Unlock()
 		systray.SetTooltip("Cursor Tray — 연결 중…")
-		systray.SetIcon(renderIcon("--", -1, idleColor))
+		systray.SetIcon(renderIcon("--", -1, idleColor, initStyle))
 
 		t.mStatus = systray.AddMenuItem("상태: 초기화 중…", "현재 상태")
 		t.mStatus.Disable()
@@ -148,6 +178,17 @@ func (t *Tray) stopSpinnerLocked() {
 	}
 }
 
+func selectedPercent(u *cursorapi.PlanUsage, which string) (label string, value float64) {
+	switch which {
+	case "auto":
+		return "Auto", u.AutoPercentUsed
+	case "api":
+		return "API", u.APIPercentUsed
+	default:
+		return "Total", u.TotalPercentUsed
+	}
+}
+
 func (t *Tray) applyLocked(s State) {
 	tooltip := "Cursor Tray"
 	iconText := "--"
@@ -155,6 +196,7 @@ func (t *Tray) applyLocked(s State) {
 	iconColor := idleColor
 	status := "초기화 중…"
 	usageLabel := "사용량: —"
+	style := t.opts.Style
 
 	switch {
 	case s.Fetching:
@@ -173,13 +215,20 @@ func (t *Tray) applyLocked(s State) {
 		status = fmt.Sprintf("상태: 오류 (%v)", s.Err)
 	case s.Usage != nil:
 		u := s.Usage
-		pct := int(u.TotalPercentUsed)
+		label, val := selectedPercent(u, t.opts.Percent)
+		pct := int(val)
+		if pct < 0 {
+			pct = 0
+		}
+		if pct > 100 {
+			pct = 100
+		}
 		tooltip = fmt.Sprintf("Cursor 사용량\nTotal %.1f%%  ·  Auto %.1f%%  ·  API %.1f%%",
 			u.TotalPercentUsed, u.AutoPercentUsed, u.APIPercentUsed)
 		iconText = fmt.Sprintf("%d", pct)
 		barPercent = pct
 		iconColor = fgColor
-		status = fmt.Sprintf("상태: 정상 (Total %.1f%%)", u.TotalPercentUsed)
+		status = fmt.Sprintf("상태: 정상 (%s %.1f%%)", label, val)
 		usageLabel = fmt.Sprintf("사용량: Total %.1f%% · Auto %.1f%% · API %.1f%%",
 			u.TotalPercentUsed, u.AutoPercentUsed, u.APIPercentUsed)
 	default:
@@ -188,7 +237,7 @@ func (t *Tray) applyLocked(s State) {
 	}
 
 	systray.SetTooltip(tooltip)
-	systray.SetIcon(renderIcon(iconText, barPercent, iconColor))
+	systray.SetIcon(renderIcon(iconText, barPercent, iconColor, style))
 	if t.mStatus != nil {
 		t.mStatus.SetTitle(status)
 	}

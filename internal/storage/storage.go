@@ -9,14 +9,33 @@ import (
 	"sync"
 )
 
+// Tray percent / style identifiers stored in config.json.
+const (
+	TrayPercentTotal = "total"
+	TrayPercentAuto  = "auto"
+	TrayPercentAPI   = "api"
+
+	TrayStyleBar     = "bar"
+	TrayStyleCircle  = "circle"
+	TrayStyleBattery = "battery"
+	TrayStyleNumber  = "number"
+)
+
 // Config holds user settings.
 type Config struct {
-	PollIntervalSeconds int  `json:"pollIntervalSeconds"` // default 10
-	AutoStart           bool `json:"autoStart"`
+	PollIntervalSeconds int    `json:"pollIntervalSeconds"` // default 10
+	AutoStart           bool   `json:"autoStart"`
+	TrayPercent         string `json:"trayPercent"` // total|auto|api
+	TrayStyle           string `json:"trayStyle"`   // bar|circle|battery|number
 }
 
 // Defaults for Config.
-var DefaultConfig = Config{PollIntervalSeconds: 10, AutoStart: false}
+var DefaultConfig = Config{
+	PollIntervalSeconds: 10,
+	AutoStart:           false,
+	TrayPercent:         TrayPercentTotal,
+	TrayStyle:           TrayStyleBar,
+}
 
 // Store manages on-disk state.
 type Store struct {
@@ -39,6 +58,22 @@ func dir() (string, error) {
 	return filepath.Join(base, "cursor-tray"), nil
 }
 
+func normalizeConfig(c *Config) {
+	if c.PollIntervalSeconds <= 0 {
+		c.PollIntervalSeconds = DefaultConfig.PollIntervalSeconds
+	}
+	switch c.TrayPercent {
+	case TrayPercentTotal, TrayPercentAuto, TrayPercentAPI:
+	default:
+		c.TrayPercent = DefaultConfig.TrayPercent
+	}
+	switch c.TrayStyle {
+	case TrayStyleBar, TrayStyleCircle, TrayStyleBattery, TrayStyleNumber:
+	default:
+		c.TrayStyle = DefaultConfig.TrayStyle
+	}
+}
+
 // Open loads (or initializes) the store under %LOCALAPPDATA%\cursor-tray.
 func Open() (*Store, error) {
 	d, err := dir()
@@ -53,9 +88,7 @@ func Open() (*Store, error) {
 
 	if b, err := os.ReadFile(filepath.Join(d, "config.json")); err == nil {
 		_ = json.Unmarshal(b, &s.config)
-		if s.config.PollIntervalSeconds <= 0 {
-			s.config.PollIntervalSeconds = 10
-		}
+		normalizeConfig(&s.config)
 	}
 
 	if b, err := os.ReadFile(filepath.Join(d, "cookies.bin")); err == nil {
@@ -75,6 +108,7 @@ func (s *Store) Config() Config {
 
 // SetConfig persists configuration changes.
 func (s *Store) SetConfig(c Config) error {
+	normalizeConfig(&c)
 	s.mu.Lock()
 	s.config = c
 	s.mu.Unlock()

@@ -43,6 +43,10 @@ type Deps struct {
 	// can show a busy spinner while the user authenticates.
 	OnLoginStart func()
 	OnLoginEnd   func()
+
+	// OnDisplayChanged is called after tray percent/style settings change
+	// so the tray icon can refresh immediately.
+	OnDisplayChanged func()
 }
 
 // Open shows the settings window and blocks until it is closed. Must be

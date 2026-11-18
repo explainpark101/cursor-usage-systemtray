@@ -53,6 +53,14 @@ func main() {
 	}
 
 	t := tray.New()
+	applyDisplayOpts := func() {
+		c := store.Config()
+		t.SetDisplayOpts(tray.DisplayOpts{
+			Percent: c.TrayPercent,
+			Style:   c.TrayStyle,
+		})
+	}
+	applyDisplayOpts()
 
 	var (
 		snapMu sync.RWMutex
@@ -116,6 +124,9 @@ func main() {
 				},
 				OnLoginStart: func() { t.SetBusy(true) },
 				OnLoginEnd:   func() { t.SetBusy(false) },
+				OnDisplayChanged: func() {
+					applyDisplayOpts()
+				},
 			})
 			if err != nil {
 				log.Printf("settings window failed: %v", err)
