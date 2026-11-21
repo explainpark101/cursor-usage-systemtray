@@ -85,28 +85,20 @@ func (t *Tray) Run(onReady func()) {
 		systray.SetTooltip("Cursor Tray — 연결 중…")
 		systray.SetIcon(renderIcon("--", -1, idleColor, initStyle))
 
+		// Info rows stay enabled so Windows draws them in normal (dark) text.
+		// Their ClickedCh is drained but ignored — only action items do work.
 		t.mStatus = systray.AddMenuItem("상태: 초기화 중…", "현재 상태")
-		t.mStatus.Disable()
 		systray.AddSeparator()
 		t.mPlan = systray.AddMenuItem("플랜: —", "구독 플랜")
-		t.mPlan.Disable()
 		t.mRenewal = systray.AddMenuItem("갱신: —", "구독 갱신 시각")
-		t.mRenewal.Disable()
 		t.mCountdown = systray.AddMenuItem("남은 시간: —", "갱신까지 남은 시간")
-		t.mCountdown.Disable()
 		systray.AddSeparator()
 		t.mUsage = systray.AddMenuItem("사용률: —", "Total / Auto / API 퍼센트")
-		t.mUsage.Disable()
 		t.mSpending = systray.AddMenuItem("Spending: —", "현재 주기 총 사용 금액")
-		t.mSpending.Disable()
 		t.mCapacity = systray.AddMenuItem("총 사용가능: —", "사용량%%와 달러로 추정한 총 사용가능 금액")
-		t.mCapacity.Disable()
 		t.mIncluded = systray.AddMenuItem("Included: —", "Included Usage")
-		t.mIncluded.Disable()
 		t.mIncluded2 = systray.AddMenuItem("  상세: —", "Included breakdown")
-		t.mIncluded2.Disable()
 		t.mOnDemand = systray.AddMenuItem("On-Demand: —", "On Demand Usage")
-		t.mOnDemand.Disable()
 		systray.AddSeparator()
 		t.mRefresh = systray.AddMenuItem("새로고침", "지금 사용량을 다시 가져옵니다")
 		t.mSettings = systray.AddMenuItem("설정…", "설정 창 열기")
@@ -116,6 +108,17 @@ func (t *Tray) Run(onReady func()) {
 		go func() {
 			for {
 				select {
+				case <-t.mStatus.ClickedCh:
+				case <-t.mPlan.ClickedCh:
+				case <-t.mRenewal.ClickedCh:
+				case <-t.mCountdown.ClickedCh:
+				case <-t.mUsage.ClickedCh:
+				case <-t.mSpending.ClickedCh:
+				case <-t.mCapacity.ClickedCh:
+				case <-t.mIncluded.ClickedCh:
+				case <-t.mIncluded2.ClickedCh:
+				case <-t.mOnDemand.ClickedCh:
+					// read-only info rows
 				case <-t.mRefresh.ClickedCh:
 					if t.OnRefresh != nil {
 						t.OnRefresh()
