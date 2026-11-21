@@ -17,6 +17,11 @@ echo Building cursor-tray !APP_VERSION! with %GOVERSION% ...
 
 if not exist dist mkdir dist
 
+rem App icon (.ico) + Windows PE resources (.syso) for exe file icon
+echo Embedding app icon...
+%GOEXE% run .\scripts\makeicon . || exit /b 1
+%GOEXE% run github.com/tc-hib/go-winres@v0.3.3 make --in winres/winres.json --arch amd64,arm64 --out cmd/cursor-tray/rsrc --product-version !APP_VERSION! --file-version !APP_VERSION! || exit /b 1
+
 set "LDFLAGS=-s -w -H windowsgui -X cursor-tray/internal/version.Version=!APP_VERSION!"
 set "OUT_AMD=dist\cursor-tray-x86_64-!APP_VERSION!.exe"
 set "OUT_ARM=dist\cursor-tray-arm64-!APP_VERSION!.exe"

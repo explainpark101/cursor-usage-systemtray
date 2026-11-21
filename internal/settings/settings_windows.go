@@ -41,6 +41,9 @@ type usageState struct {
 	SpendingBonus    string `json:"spendingBonus"`
 	SpendingLimit    string `json:"spendingLimit"`
 
+	EstimatedCapacity  string `json:"estimatedCapacity"`
+	EstimatedRemaining string `json:"estimatedRemaining"`
+
 	IncludedUsed      string `json:"includedUsed"`
 	IncludedLimit     string `json:"includedLimit"`
 	IncludedRemaining string `json:"includedRemaining"`
@@ -79,6 +82,21 @@ func openWindow(d Deps) error {
 	}
 	w.SetSize(480, 900, webview2.HintFixed)
 
+	estimatedCapacityLabel := func(snap *cursorapi.Snapshot) string {
+		return cursorapi.FormatEstimatedCapacity(snap.TotalSpendCents, snap.PlanUsage.TotalPercentUsed)
+	}
+	estimatedRemainingLabel := func(snap *cursorapi.Snapshot) string {
+		cap, ok := snap.EstimatedCapacityCents()
+		if !ok {
+			return "—"
+		}
+		left := cap - snap.TotalSpendCents
+		if left < 0 {
+			left = 0
+		}
+		return cursorapi.FormatUSD(left)
+	}
+
 	toUsageState := func(snap *cursorapi.Snapshot) *usageState {
 		if snap == nil {
 			return nil
@@ -101,6 +119,9 @@ func openWindow(d Deps) error {
 			SpendingIncluded: cursorapi.FormatUSD(snap.IncludedSpendCents),
 			SpendingBonus:    cursorapi.FormatUSD(snap.BonusSpendCents),
 			SpendingLimit:    cursorapi.FormatUSD(snap.PlanLimitCents),
+
+			EstimatedCapacity:  estimatedCapacityLabel(snap),
+			EstimatedRemaining: estimatedRemainingLabel(snap),
 
 			IncludedUsed:      cursorapi.FormatUSD(snap.IncludedUsedCents),
 			IncludedLimit:     cursorapi.FormatUSD(snap.IncludedLimitCents),

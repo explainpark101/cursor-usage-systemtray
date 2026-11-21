@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -74,6 +75,27 @@ func (s *Snapshot) Remaining(now time.Time) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// EstimatedCapacityCents estimates the full usage pool in USD cents from
+// current Total spend and Total percent used:
+//
+//	capacity ≈ usedSpend / (percentUsed / 100)
+//
+// Returns ok=false when percent is too small to invert reliably.
+func (s *Snapshot) EstimatedCapacityCents() (cents int64, ok bool) {
+	if s == nil {
+		return 0, false
+	}
+	return EstimateCapacityCents(s.TotalSpendCents, s.PlanUsage.TotalPercentUsed)
+}
+
+// EstimateCapacityCents computes capacityCents = usedCents * 100 / percentUsed.
+func EstimateCapacityCents(usedCents int64, percentUsed float64) (cents int64, ok bool) {
+	if percentUsed < 0.01 || usedCents < 0 {
+		return 0, false
+	}
+	return int64(math.Round(float64(usedCents) * 100.0 / percentUsed)), true
 }
 
 var ErrUnauthorized = errors.New("cursorapi: unauthorized (HTTP 401/403)")
@@ -438,16 +460,26 @@ func FormatUSDPtr(cents *int64) string {
 	return FormatUSD(*cents)
 }
 
-// FormatRemaining formats a duration as "Dd Hh Mm" (days/hours/minutes).
+// FormatEstimatedCapacity formats an estimated capacity, or "—" when unknown.
+func FormatEstimatedCapacity(usedCents int64, percentUsed float64) string {
+	cents, ok := EstimateCapacityCents(usedCents, percentUsed)
+	if !ok {
+		return "—"
+	}
+	return FormatUSD(cents)
+}
+
+// FormatRemaining formats a duration as "Dd Hh Mm Ss" (days/hours/minutes/seconds).
 func FormatRemaining(d time.Duration) string {
 	if d < 0 {
 		d = 0
 	}
-	totalMin := int64(d / time.Minute)
-	days := totalMin / (60 * 24)
-	hours := (totalMin % (60 * 24)) / 60
-	mins := totalMin % 60
-	return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+	totalSec := int64(d / time.Second)
+	days := totalSec / (60 * 60 * 24)
+	hours := (totalSec % (60 * 60 * 24)) / (60 * 60)
+	mins := (totalSec % (60 * 60)) / 60
+	secs := totalSec % 60
+	return fmt.Sprintf("%dd %dh %dm %ds", days, hours, mins, secs)
 }
 
 // FormatLocalTime formats t in the local timezone.

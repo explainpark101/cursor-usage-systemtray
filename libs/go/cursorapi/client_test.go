@@ -128,8 +128,8 @@ func TestFormatUSDAndRemaining(t *testing.T) {
 	if got := FormatUSD(75693); got != "$756.93" {
 		t.Fatalf("FormatUSD bonus: %s", got)
 	}
-	d := 26*time.Hour + 5*time.Minute
-	if got := FormatRemaining(d); got != "1d 2h 5m" {
+	d := 26*time.Hour + 5*time.Minute + 7*time.Second
+	if got := FormatRemaining(d); got != "1d 2h 5m 7s" {
 		t.Fatalf("FormatRemaining: %s", got)
 	}
 }

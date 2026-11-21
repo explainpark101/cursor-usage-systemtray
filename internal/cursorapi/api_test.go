@@ -128,8 +128,25 @@ func TestFormatUSDAndRemaining(t *testing.T) {
 	if got := FormatUSD(75693); got != "$756.93" {
 		t.Fatalf("FormatUSD bonus: %s", got)
 	}
-	d := 26*time.Hour + 5*time.Minute
-	if got := FormatRemaining(d); got != "1d 2h 5m" {
+	d := 26*time.Hour + 5*time.Minute + 7*time.Second
+	if got := FormatRemaining(d); got != "1d 2h 5m 7s" {
 		t.Fatalf("FormatRemaining: %s", got)
+	}
+}
+
+func TestEstimateCapacityCents(t *testing.T) {
+	// $826.93 at 67.367% → ~$1227.45
+	got, ok := EstimateCapacityCents(82693, 67.367)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if got < 122700 || got > 122800 {
+		t.Fatalf("capacity cents=%d", got)
+	}
+	if _, ok := EstimateCapacityCents(100, 0); ok {
+		t.Fatal("zero percent should fail")
+	}
+	if FormatEstimatedCapacity(5000, 50) != "$100.00" {
+		t.Fatalf("format: %s", FormatEstimatedCapacity(5000, 50))
 	}
 }

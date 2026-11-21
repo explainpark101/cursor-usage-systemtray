@@ -29,6 +29,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
 OutputBaseFilename=cursor-tray-setup-x86_64-{#MyAppVersion}
+SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
 SolidCompression=yes

@@ -49,6 +49,8 @@ build.bat
 ```
 
 버전은 `go.mod`의 `// Version: x.y.z` 한 줄에서 읽습니다. 빌드 산출물 파일명에도 버전이 포함됩니다.
+앱 아이콘은 [`assets/`](assets/)이며, 빌드 시 `go-winres`로 exe에 임베드되고 Inno Setup
+설치 마법사/`SetupIconFile`에도 사용됩니다.
 
 산출물 (`dist\`, 예: 버전 `1.0.1`):
 
@@ -60,6 +62,15 @@ build.bat
 ```
 go build -ldflags="-s -w -H windowsgui" -o cursor-tray.exe ./cmd/cursor-tray
 ```
+
+## 라이브러리
+
+대시보드 API 클라이언트는 언어별로 [`libs/`](libs/)에도 분리되어 있습니다.
+
+- Go — `libs/go`
+- Python — `libs/python`
+- TypeScript — `libs/typescript`
+- Rust — `libs/rust`
 
 ## 아키텍처
 

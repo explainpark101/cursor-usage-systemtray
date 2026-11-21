@@ -37,6 +37,7 @@ type Tray struct {
 	busy     bool // login / other blocking UI work
 	spinN    int
 	spinStop chan struct{}
+	tickStop chan struct{}
 
 	mStatus    *systray.MenuItem
 	mPlan      *systray.MenuItem
@@ -44,6 +45,7 @@ type Tray struct {
 	mCountdown *systray.MenuItem
 	mUsage     *systray.MenuItem
 	mSpending  *systray.MenuItem
+	mCapacity  *systray.MenuItem
 	mIncluded  *systray.MenuItem
 	mIncluded2 *systray.MenuItem
 	mOnDemand  *systray.MenuItem
@@ -97,6 +99,8 @@ func (t *Tray) Run(onReady func()) {
 		t.mUsage.Disable()
 		t.mSpending = systray.AddMenuItem("Spending: —", "현재 주기 총 사용 금액")
 		t.mSpending.Disable()
+		t.mCapacity = systray.AddMenuItem("총 사용가능: —", "사용량%%와 달러로 추정한 총 사용가능 금액")
+		t.mCapacity.Disable()
 		t.mIncluded = systray.AddMenuItem("Included: —", "Included Usage")
 		t.mIncluded.Disable()
 		t.mIncluded2 = systray.AddMenuItem("  상세: —", "Included breakdown")
@@ -121,6 +125,7 @@ func (t *Tray) Run(onReady func()) {
 						t.OnSettings()
 					}
 				case <-mQuit.ClickedCh:
+					t.stopCountdownTicker()
 					if t.OnQuit != nil {
 						t.OnQuit()
 					}
@@ -130,10 +135,88 @@ func (t *Tray) Run(onReady func()) {
 			}
 		}()
 
+		t.startCountdownTicker()
+
 		if onReady != nil {
 			onReady()
 		}
 	}, nil)
+}
+
+// startCountdownTicker refreshes remaining-time labels every second.
+func (t *Tray) startCountdownTicker() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.stopCountdownTickerLocked()
+	stop := make(chan struct{})
+	t.tickStop = stop
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				t.tickCountdown()
+			}
+		}
+	}()
+}
+
+func (t *Tray) stopCountdownTicker() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.stopCountdownTickerLocked()
+}
+
+func (t *Tray) stopCountdownTickerLocked() {
+	if t.tickStop != nil {
+		close(t.tickStop)
+		t.tickStop = nil
+	}
+}
+
+func (t *Tray) tickCountdown() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.busy {
+		return
+	}
+	s := t.state
+	if s.Fetching || s.Unauthorized || s.Err != nil || s.Snapshot == nil {
+		return
+	}
+	if s.Snapshot.BillingCycleEnd.IsZero() {
+		return
+	}
+	t.applyCountdownLocked(s.Snapshot)
+}
+
+// applyCountdownLocked updates only labels that include live remaining time.
+func (t *Tray) applyCountdownLocked(snap *cursorapi.Snapshot) {
+	remainStr := cursorapi.FormatRemaining(snap.Remaining(time.Now()))
+	renewAt := cursorapi.FormatLocalTime(snap.BillingCycleEnd)
+
+	planBits := snap.PlanName
+	if planBits == "" {
+		planBits = snap.MembershipType
+	}
+	if snap.PlanPrice != "" {
+		planBits = fmt.Sprintf("%s (%s)", planBits, snap.PlanPrice)
+	}
+	if planBits == "" {
+		planBits = "—"
+	}
+
+	label, val := selectedPercent(snap.PlanUsage, t.opts.Percent)
+	setTitle(t.mCountdown, "남은 시간: "+remainStr)
+	setTitle(t.mStatus, fmt.Sprintf("상태: 정상 (%s %.1f%% · %s 남음)", label, val, remainStr))
+	systray.SetTooltip(fmt.Sprintf("Cursor %s\n갱신 %s (%s 남음)\nTotal %.0f%% · Included %s/%s",
+		planBits, renewAt, remainStr,
+		snap.PlanUsage.TotalPercentUsed,
+		cursorapi.FormatUSD(snap.IncludedUsedCents),
+		cursorapi.FormatUSD(snap.IncludedLimitCents)))
 }
 
 // SetBusy shows an animated spinner in the tray (e.g. during login).
@@ -231,6 +314,7 @@ func (t *Tray) applyLocked(s State) {
 	countdownLabel := "남은 시간: —"
 	usageLabel := "사용률: —"
 	spendingLabel := "Spending: —"
+	capacityLabel := "총 사용가능: —"
 	includedLabel := "Included: —"
 	included2Label := "  상세: —"
 	onDemandLabel := "On-Demand: —"
@@ -288,6 +372,21 @@ func (t *Tray) applyLocked(s State) {
 			cursorapi.FormatUSD(snap.IncludedSpendCents),
 			cursorapi.FormatUSD(snap.BonusSpendCents))
 
+		capStr := cursorapi.FormatEstimatedCapacity(snap.TotalSpendCents, u.TotalPercentUsed)
+		if cap, ok := snap.EstimatedCapacityCents(); ok {
+			left := cap - snap.TotalSpendCents
+			if left < 0 {
+				left = 0
+			}
+			capacityLabel = fmt.Sprintf("총 사용가능: %s (사용 %s · %.1f%% · 추정잔여 %s)",
+				capStr,
+				cursorapi.FormatUSD(snap.TotalSpendCents),
+				u.TotalPercentUsed,
+				cursorapi.FormatUSD(left))
+		} else {
+			capacityLabel = "총 사용가능: —"
+		}
+
 		includedLabel = fmt.Sprintf("Included: %s / %s (남은 %s)",
 			cursorapi.FormatUSD(snap.IncludedUsedCents),
 			cursorapi.FormatUSD(snap.IncludedLimitCents),
@@ -307,11 +406,11 @@ func (t *Tray) applyLocked(s State) {
 				cursorapi.FormatUSD(snap.OnDemandUsedCents))
 		}
 
-		tooltip = fmt.Sprintf("Cursor %s\n갱신 %s (%s 남음)\nTotal %.0f%% · Included %s/%s",
+		tooltip = fmt.Sprintf("Cursor %s\n갱신 %s (%s 남음)\nTotal %.0f%% · 사용 %s / 총가능 %s",
 			planBits, renewAt, remainStr,
 			u.TotalPercentUsed,
-			cursorapi.FormatUSD(snap.IncludedUsedCents),
-			cursorapi.FormatUSD(snap.IncludedLimitCents))
+			cursorapi.FormatUSD(snap.TotalSpendCents),
+			capStr)
 
 		iconText = fmt.Sprintf("%d", pct)
 		barPercent = pct
@@ -330,6 +429,7 @@ func (t *Tray) applyLocked(s State) {
 	setTitle(t.mCountdown, countdownLabel)
 	setTitle(t.mUsage, usageLabel)
 	setTitle(t.mSpending, spendingLabel)
+	setTitle(t.mCapacity, capacityLabel)
 	setTitle(t.mIncluded, includedLabel)
 	setTitle(t.mIncluded2, included2Label)
 	setTitle(t.mOnDemand, onDemandLabel)

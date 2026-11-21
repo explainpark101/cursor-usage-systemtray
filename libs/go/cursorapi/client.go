@@ -1,4 +1,4 @@
-// Package cursorapi talks to the undocumented cursor.com dashboard usage APIs.
+// Package cursorapi is an unofficial client for cursor.com dashboard usage APIs.
 package cursorapi
 
 import (
@@ -438,16 +438,17 @@ func FormatUSDPtr(cents *int64) string {
 	return FormatUSD(*cents)
 }
 
-// FormatRemaining formats a duration as "Dd Hh Mm" (days/hours/minutes).
+// FormatRemaining formats a duration as "Dd Hh Mm Ss" (days/hours/minutes/seconds).
 func FormatRemaining(d time.Duration) string {
 	if d < 0 {
 		d = 0
 	}
-	totalMin := int64(d / time.Minute)
-	days := totalMin / (60 * 24)
-	hours := (totalMin % (60 * 24)) / 60
-	mins := totalMin % 60
-	return fmt.Sprintf("%dd %dh %dm", days, hours, mins)
+	totalSec := int64(d / time.Second)
+	days := totalSec / (60 * 60 * 24)
+	hours := (totalSec % (60 * 60 * 24)) / (60 * 60)
+	mins := (totalSec % (60 * 60)) / 60
+	secs := totalSec % 60
+	return fmt.Sprintf("%dd %dh %dm %ds", days, hours, mins, secs)
 }
 
 // FormatLocalTime formats t in the local timezone.

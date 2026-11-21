@@ -112,6 +112,8 @@
       <div class="detail-row"><span class="k">Included</span><span class="v" id="uSpendIncluded">—</span></div>
       <div class="detail-row"><span class="k">Bonus</span><span class="v" id="uSpendBonus">—</span></div>
       <div class="detail-row"><span class="k">Plan limit</span><span class="v" id="uSpendLimit">—</span></div>
+      <div class="detail-row"><span class="k">총 사용가능 (추정)</span><span class="v" id="uEstCapacity">—</span></div>
+      <div class="detail-row"><span class="k">추정 잔여</span><span class="v" id="uEstRemain">—</span></div>
     </div>
     <div class="section-title">Included Usage</div>
     <div class="detail-list">
@@ -211,6 +213,8 @@ function render(state) {
     document.getElementById('uSpendIncluded').textContent = u.spendingIncluded || '—';
     document.getElementById('uSpendBonus').textContent = u.spendingBonus || '—';
     document.getElementById('uSpendLimit').textContent = u.spendingLimit || '—';
+    document.getElementById('uEstCapacity').textContent = u.estimatedCapacity || '—';
+    document.getElementById('uEstRemain').textContent = u.estimatedRemaining || '—';
     document.getElementById('uIncUsedLimit').textContent = (u.includedUsed || '—') + ' / ' + (u.includedLimit || '—');
     document.getElementById('uIncRemain').textContent = u.includedRemaining || '—';
     document.getElementById('uIncBonus').textContent = u.includedBonus || '—';

@@ -16,6 +16,14 @@ coverage.out
 coverage.html
 vendor/
 
+# Language libs
+libs/rust/target/
+libs/typescript/dist/
+libs/typescript/node_modules/
+libs/python/**/__pycache__/
+libs/python/*.egg-info/
+.tmp-api-probe/
+
 # IDE / editor
 .idea/
 .vscode/
@@ -37,4 +45,3 @@ Desktop.ini
 # Inno Setup local output (if compiled outside dist/)
 Output/
 *.iss.bak
-.tmp-api-probe/
