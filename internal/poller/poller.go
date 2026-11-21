@@ -13,7 +13,7 @@ import (
 
 // Event is delivered to the UI layer after each poll attempt.
 type Event struct {
-	Usage        *cursorapi.PlanUsage
+	Snapshot     *cursorapi.Snapshot
 	Err          error
 	Unauthorized bool
 }
@@ -84,12 +84,12 @@ func (p *Poller) Run(ctx context.Context) {
 			cookie = p.Cookie()
 		}
 
-		var usage *cursorapi.PlanUsage
+		var snap *cursorapi.Snapshot
 		var err error
 		if cookie == "" {
 			err = cursorapi.ErrUnauthorized
 		} else {
-			usage, err = cursorapi.Fetch(ctx, cookie)
+			snap, err = cursorapi.Fetch(ctx, cookie)
 		}
 
 		p.mu.Lock()
@@ -104,7 +104,7 @@ func (p *Poller) Run(ctx context.Context) {
 		unauthorized := errors.Is(err, cursorapi.ErrUnauthorized)
 		if p.Out != nil {
 			select {
-			case p.Out <- Event{Usage: usage, Err: err, Unauthorized: unauthorized}:
+			case p.Out <- Event{Snapshot: snap, Err: err, Unauthorized: unauthorized}:
 			case <-p.stop:
 				return
 			}

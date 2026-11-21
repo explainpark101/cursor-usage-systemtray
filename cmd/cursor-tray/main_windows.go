@@ -66,10 +66,10 @@ func main() {
 		snapMu sync.RWMutex
 		snap   settings.UsageInfo
 	)
-	setSnap := func(u *cursorapi.PlanUsage, err error, unauthorized bool) {
+	setSnap := func(s *cursorapi.Snapshot, err error, unauthorized bool) {
 		snapMu.Lock()
 		defer snapMu.Unlock()
-		snap.Usage = u
+		snap.Snapshot = s
 		snap.Unauthorized = unauthorized
 		if err != nil && !unauthorized {
 			snap.Err = err.Error()
@@ -144,9 +144,9 @@ func main() {
 	go p.Run(ctx)
 	go func() {
 		for ev := range events {
-			setSnap(ev.Usage, ev.Err, ev.Unauthorized)
+			setSnap(ev.Snapshot, ev.Err, ev.Unauthorized)
 			t.Update(tray.State{
-				Usage:        ev.Usage,
+				Snapshot:     ev.Snapshot,
 				Err:          ev.Err,
 				Unauthorized: ev.Unauthorized,
 			})

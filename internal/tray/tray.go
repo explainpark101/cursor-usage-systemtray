@@ -13,7 +13,7 @@ import (
 
 // State describes what the tray should currently show.
 type State struct {
-	Usage        *cursorapi.PlanUsage
+	Snapshot     *cursorapi.Snapshot
 	Err          error
 	Unauthorized bool
 	Fetching     bool
@@ -38,10 +38,17 @@ type Tray struct {
 	spinN    int
 	spinStop chan struct{}
 
-	mUsage    *systray.MenuItem
-	mRefresh  *systray.MenuItem
-	mSettings *systray.MenuItem
-	mStatus   *systray.MenuItem
+	mStatus    *systray.MenuItem
+	mPlan      *systray.MenuItem
+	mRenewal   *systray.MenuItem
+	mCountdown *systray.MenuItem
+	mUsage     *systray.MenuItem
+	mSpending  *systray.MenuItem
+	mIncluded  *systray.MenuItem
+	mIncluded2 *systray.MenuItem
+	mOnDemand  *systray.MenuItem
+	mRefresh   *systray.MenuItem
+	mSettings  *systray.MenuItem
 }
 
 // New creates the tray wrapper. Call Run from the main goroutine.
@@ -79,8 +86,24 @@ func (t *Tray) Run(onReady func()) {
 		t.mStatus = systray.AddMenuItem("상태: 초기화 중…", "현재 상태")
 		t.mStatus.Disable()
 		systray.AddSeparator()
-		t.mUsage = systray.AddMenuItem("사용량: —", "최근 사용량")
+		t.mPlan = systray.AddMenuItem("플랜: —", "구독 플랜")
+		t.mPlan.Disable()
+		t.mRenewal = systray.AddMenuItem("갱신: —", "구독 갱신 시각")
+		t.mRenewal.Disable()
+		t.mCountdown = systray.AddMenuItem("남은 시간: —", "갱신까지 남은 시간")
+		t.mCountdown.Disable()
+		systray.AddSeparator()
+		t.mUsage = systray.AddMenuItem("사용률: —", "Total / Auto / API 퍼센트")
 		t.mUsage.Disable()
+		t.mSpending = systray.AddMenuItem("Spending: —", "현재 주기 총 사용 금액")
+		t.mSpending.Disable()
+		t.mIncluded = systray.AddMenuItem("Included: —", "Included Usage")
+		t.mIncluded.Disable()
+		t.mIncluded2 = systray.AddMenuItem("  상세: —", "Included breakdown")
+		t.mIncluded2.Disable()
+		t.mOnDemand = systray.AddMenuItem("On-Demand: —", "On Demand Usage")
+		t.mOnDemand.Disable()
+		systray.AddSeparator()
 		t.mRefresh = systray.AddMenuItem("새로고침", "지금 사용량을 다시 가져옵니다")
 		t.mSettings = systray.AddMenuItem("설정…", "설정 창 열기")
 		systray.AddSeparator()
@@ -178,7 +201,7 @@ func (t *Tray) stopSpinnerLocked() {
 	}
 }
 
-func selectedPercent(u *cursorapi.PlanUsage, which string) (label string, value float64) {
+func selectedPercent(u cursorapi.PlanUsage, which string) (label string, value float64) {
 	switch which {
 	case "auto":
 		return "Auto", u.AutoPercentUsed
@@ -189,14 +212,28 @@ func selectedPercent(u *cursorapi.PlanUsage, which string) (label string, value 
 	}
 }
 
+func setTitle(m *systray.MenuItem, title string) {
+	if m != nil {
+		m.SetTitle(title)
+	}
+}
+
 func (t *Tray) applyLocked(s State) {
 	tooltip := "Cursor Tray"
 	iconText := "--"
 	barPercent := -1
 	iconColor := idleColor
 	status := "초기화 중…"
-	usageLabel := "사용량: —"
 	style := t.opts.Style
+
+	planLabel := "플랜: —"
+	renewalLabel := "갱신: —"
+	countdownLabel := "남은 시간: —"
+	usageLabel := "사용률: —"
+	spendingLabel := "Spending: —"
+	includedLabel := "Included: —"
+	included2Label := "  상세: —"
+	onDemandLabel := "On-Demand: —"
 
 	switch {
 	case s.Fetching:
@@ -207,14 +244,15 @@ func (t *Tray) applyLocked(s State) {
 		iconText = "!"
 		iconColor = errorColor
 		status = "상태: 로그인 필요 (설정에서 로그인)"
-		usageLabel = "사용량: 로그인 필요"
+		usageLabel = "사용률: 로그인 필요"
 	case s.Err != nil:
 		tooltip = fmt.Sprintf("Cursor Tray — 오류: %v", s.Err)
 		iconText = "!"
 		iconColor = errorColor
 		status = fmt.Sprintf("상태: 오류 (%v)", s.Err)
-	case s.Usage != nil:
-		u := s.Usage
+	case s.Snapshot != nil:
+		snap := s.Snapshot
+		u := snap.PlanUsage
 		label, val := selectedPercent(u, t.opts.Percent)
 		pct := int(val)
 		if pct < 0 {
@@ -223,14 +261,62 @@ func (t *Tray) applyLocked(s State) {
 		if pct > 100 {
 			pct = 100
 		}
-		tooltip = fmt.Sprintf("Cursor 사용량\nTotal %.1f%%  ·  Auto %.1f%%  ·  API %.1f%%",
+
+		remain := snap.Remaining(time.Now())
+		remainStr := cursorapi.FormatRemaining(remain)
+		renewAt := cursorapi.FormatLocalTime(snap.BillingCycleEnd)
+
+		planBits := snap.PlanName
+		if planBits == "" {
+			planBits = snap.MembershipType
+		}
+		if snap.PlanPrice != "" {
+			planBits = fmt.Sprintf("%s (%s)", planBits, snap.PlanPrice)
+		}
+		if planBits == "" {
+			planBits = "—"
+		}
+		planLabel = "플랜: " + planBits
+		renewalLabel = "갱신: " + renewAt
+		countdownLabel = "남은 시간: " + remainStr
+
+		usageLabel = fmt.Sprintf("사용률: Total %.1f%% · Auto %.1f%% · API %.1f%%",
 			u.TotalPercentUsed, u.AutoPercentUsed, u.APIPercentUsed)
+
+		spendingLabel = fmt.Sprintf("Spending: %s (포함 %s + 보너스 %s)",
+			cursorapi.FormatUSD(snap.TotalSpendCents),
+			cursorapi.FormatUSD(snap.IncludedSpendCents),
+			cursorapi.FormatUSD(snap.BonusSpendCents))
+
+		includedLabel = fmt.Sprintf("Included: %s / %s (남은 %s)",
+			cursorapi.FormatUSD(snap.IncludedUsedCents),
+			cursorapi.FormatUSD(snap.IncludedLimitCents),
+			cursorapi.FormatUSD(snap.IncludedRemainingCents))
+		included2Label = fmt.Sprintf("  상세: 포함 %s · 보너스 %s · 합계 %s",
+			cursorapi.FormatUSD(snap.IncludedSpendCents),
+			cursorapi.FormatUSD(snap.IncludedBonusCents),
+			cursorapi.FormatUSD(snap.IncludedBreakdownTotal))
+
+		if snap.OnDemandEnabled {
+			onDemandLabel = fmt.Sprintf("On-Demand: %s / %s (남은 %s)",
+				cursorapi.FormatUSD(snap.OnDemandUsedCents),
+				cursorapi.FormatUSDPtr(snap.OnDemandLimitCents),
+				cursorapi.FormatUSDPtr(snap.OnDemandRemainingCents))
+		} else {
+			onDemandLabel = fmt.Sprintf("On-Demand: 비활성 · 사용 %s",
+				cursorapi.FormatUSD(snap.OnDemandUsedCents))
+		}
+
+		tooltip = fmt.Sprintf("Cursor %s\n갱신 %s (%s 남음)\nTotal %.0f%% · Included %s/%s",
+			planBits, renewAt, remainStr,
+			u.TotalPercentUsed,
+			cursorapi.FormatUSD(snap.IncludedUsedCents),
+			cursorapi.FormatUSD(snap.IncludedLimitCents))
+
 		iconText = fmt.Sprintf("%d", pct)
 		barPercent = pct
 		iconColor = fgColor
-		status = fmt.Sprintf("상태: 정상 (%s %.1f%%)", label, val)
-		usageLabel = fmt.Sprintf("사용량: Total %.1f%% · Auto %.1f%% · API %.1f%%",
-			u.TotalPercentUsed, u.AutoPercentUsed, u.APIPercentUsed)
+		status = fmt.Sprintf("상태: 정상 (%s %.1f%% · %s 남음)", label, val, remainStr)
 	default:
 		tooltip = "Cursor Tray — 가져오는 중…"
 		status = "상태: 가져오는 중…"
@@ -238,10 +324,13 @@ func (t *Tray) applyLocked(s State) {
 
 	systray.SetTooltip(tooltip)
 	systray.SetIcon(renderIcon(iconText, barPercent, iconColor, style))
-	if t.mStatus != nil {
-		t.mStatus.SetTitle(status)
-	}
-	if t.mUsage != nil {
-		t.mUsage.SetTitle(usageLabel)
-	}
+	setTitle(t.mStatus, status)
+	setTitle(t.mPlan, planLabel)
+	setTitle(t.mRenewal, renewalLabel)
+	setTitle(t.mCountdown, countdownLabel)
+	setTitle(t.mUsage, usageLabel)
+	setTitle(t.mSpending, spendingLabel)
+	setTitle(t.mIncluded, includedLabel)
+	setTitle(t.mIncluded2, included2Label)
+	setTitle(t.mOnDemand, onDemandLabel)
 }

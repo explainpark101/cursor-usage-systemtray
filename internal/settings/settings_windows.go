@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"cursor-tray/internal/auth"
 	"cursor-tray/internal/autostart"
@@ -25,6 +26,31 @@ type usageState struct {
 	TotalPercent float64 `json:"totalPercent"`
 	AutoPercent  float64 `json:"autoPercent"`
 	APIPercent   float64 `json:"apiPercent"`
+
+	PlanName       string `json:"planName"`
+	PlanPrice      string `json:"planPrice"`
+	MembershipType string `json:"membershipType"`
+	DisplayMessage string `json:"displayMessage"`
+
+	RenewalAt      string `json:"renewalAt"`
+	RemainingLabel string `json:"remainingLabel"`
+	BillingStart   string `json:"billingStart"`
+
+	SpendingTotal    string `json:"spendingTotal"`
+	SpendingIncluded string `json:"spendingIncluded"`
+	SpendingBonus    string `json:"spendingBonus"`
+	SpendingLimit    string `json:"spendingLimit"`
+
+	IncludedUsed      string `json:"includedUsed"`
+	IncludedLimit     string `json:"includedLimit"`
+	IncludedRemaining string `json:"includedRemaining"`
+	IncludedBonus     string `json:"includedBonus"`
+	IncludedBreakdown string `json:"includedBreakdown"`
+
+	OnDemandEnabled   bool   `json:"onDemandEnabled"`
+	OnDemandUsed      string `json:"onDemandUsed"`
+	OnDemandLimit     string `json:"onDemandLimit"`
+	OnDemandRemaining string `json:"onDemandRemaining"`
 }
 
 type state struct {
@@ -43,24 +69,49 @@ func openWindow(d Deps) error {
 
 	w, err := webview2.New(webview2.Options{
 		Title:    "Cursor Tray 설정",
-		Width:    460,
-		Height:   760,
+		Width:    480,
+		Height:   900,
 		Center:   true,
 		DataPath: d.WebViewDataPath,
 	})
 	if err != nil {
 		return err
 	}
-	w.SetSize(460, 760, webview2.HintFixed)
+	w.SetSize(480, 900, webview2.HintFixed)
 
-	toUsageState := func(u *cursorapi.PlanUsage) *usageState {
-		if u == nil {
+	toUsageState := func(snap *cursorapi.Snapshot) *usageState {
+		if snap == nil {
 			return nil
 		}
 		return &usageState{
-			TotalPercent: u.TotalPercentUsed,
-			AutoPercent:  u.AutoPercentUsed,
-			APIPercent:   u.APIPercentUsed,
+			TotalPercent: snap.PlanUsage.TotalPercentUsed,
+			AutoPercent:  snap.PlanUsage.AutoPercentUsed,
+			APIPercent:   snap.PlanUsage.APIPercentUsed,
+
+			PlanName:       snap.PlanName,
+			PlanPrice:      snap.PlanPrice,
+			MembershipType: snap.MembershipType,
+			DisplayMessage: snap.DisplayMessage,
+
+			RenewalAt:      cursorapi.FormatLocalTime(snap.BillingCycleEnd),
+			RemainingLabel: cursorapi.FormatRemaining(snap.Remaining(time.Now())),
+			BillingStart:   cursorapi.FormatLocalTime(snap.BillingCycleStart),
+
+			SpendingTotal:    cursorapi.FormatUSD(snap.TotalSpendCents),
+			SpendingIncluded: cursorapi.FormatUSD(snap.IncludedSpendCents),
+			SpendingBonus:    cursorapi.FormatUSD(snap.BonusSpendCents),
+			SpendingLimit:    cursorapi.FormatUSD(snap.PlanLimitCents),
+
+			IncludedUsed:      cursorapi.FormatUSD(snap.IncludedUsedCents),
+			IncludedLimit:     cursorapi.FormatUSD(snap.IncludedLimitCents),
+			IncludedRemaining: cursorapi.FormatUSD(snap.IncludedRemainingCents),
+			IncludedBonus:     cursorapi.FormatUSD(snap.IncludedBonusCents),
+			IncludedBreakdown: cursorapi.FormatUSD(snap.IncludedBreakdownTotal),
+
+			OnDemandEnabled:   snap.OnDemandEnabled,
+			OnDemandUsed:      cursorapi.FormatUSD(snap.OnDemandUsedCents),
+			OnDemandLimit:     cursorapi.FormatUSDPtr(snap.OnDemandLimitCents),
+			OnDemandRemaining: cursorapi.FormatUSDPtr(snap.OnDemandRemainingCents),
 		}
 	}
 
@@ -82,10 +133,10 @@ func openWindow(d Deps) error {
 			TrayStyle:           c.TrayStyle,
 		}
 		if d.Snapshot != nil {
-			snap := d.Snapshot()
-			s.Usage = toUsageState(snap.Usage)
-			s.UsageError = snap.Err
-			if cookie != "" && snap.Unauthorized {
+			info := d.Snapshot()
+			s.Usage = toUsageState(info.Snapshot)
+			s.UsageError = info.Err
+			if cookie != "" && info.Unauthorized {
 				s.LoggedIn = false
 				if s.UsageError == "" {
 					s.UsageError = "세션이 유효하지 않습니다. 다시 로그인하세요."
@@ -106,7 +157,7 @@ func openWindow(d Deps) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cursorapi.Timeout)
 		defer cancel()
-		u, err := cursorapi.Fetch(ctx, cookie)
+		snap, err := cursorapi.Fetch(ctx, cookie)
 		if err != nil {
 			s.Usage = nil
 			if errors.Is(err, cursorapi.ErrUnauthorized) {
@@ -118,7 +169,7 @@ func openWindow(d Deps) error {
 			return s
 		}
 		s.LoggedIn = true
-		s.Usage = toUsageState(u)
+		s.Usage = toUsageState(snap)
 		s.UsageError = ""
 		return s
 	}
@@ -239,7 +290,7 @@ func openWindow(d Deps) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), cursorapi.Timeout)
 		defer cancel()
-		u, err := cursorapi.Fetch(ctx, header)
+		snap, err := cursorapi.Fetch(ctx, header)
 		if err != nil {
 			if errors.Is(err, cursorapi.ErrUnauthorized) {
 				return cachedState(), errors.New("쿠키가 거부되었습니다. WorkosCursorSessionToken 값을 확인하세요")
@@ -252,7 +303,7 @@ func openWindow(d Deps) error {
 		notify()
 		s := cachedState()
 		s.LoggedIn = true
-		s.Usage = toUsageState(u)
+		s.Usage = toUsageState(snap)
 		s.UsageError = ""
 		return s, nil
 	}); err != nil {

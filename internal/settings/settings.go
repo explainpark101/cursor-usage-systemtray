@@ -12,7 +12,7 @@ import (
 // UsageInfo is a tray/poller snapshot shown immediately when settings opens
 // so the UI does not wait on a network round-trip.
 type UsageInfo struct {
-	Usage        *cursorapi.PlanUsage
+	Snapshot     *cursorapi.Snapshot
 	Err          string
 	Unauthorized bool
 }

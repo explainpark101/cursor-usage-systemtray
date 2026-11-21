@@ -1,12 +1,14 @@
 # Cursor Tray
 
-Windows 시스템 트레이 전용 Cursor 사용량 모니터. 작업표시줄에 표시되지 않으며,
-10초마다 `cursor.com` 사용량을 가져와 트레이 아이콘에 사용률(%)을 표시합니다.
+Windows 시스템 트레이 전용 Cursor 사용량/구독 모니터. 작업표시줄에 표시되지 않으며,
+10초마다 `cursor.com` 대시보드를 폴링해 트레이 아이콘에 사용률(%)을 표시합니다.
 
 ## 특징
 
 - **트레이 전용**: `-H windowsgui` 빌드, 작업표시줄/콘솔 창 없음
 - **아이콘에 사용률 표시**: 16×16 아이콘에 숫자 + 색상 바(70% 노랑, 90% 빨강)
+- **구독 갱신 추적**: 갱신 시각 + 남은 일/시/분 카운트다운
+- **Spending / Included / On-Demand**: 금액(센트→달러)과 한도·잔여까지 메뉴·설정에 표시
 - **10초 폴 + 지수 백오프**: 오류 시 10s→20s→…→최대 5분, 복구 시 즉시 10s 복귀
 - **401/403 감지**: 로그인 만료 시 아이콘 "!" 상태로 표시
 - **WebView2 로그인**: 설정에서 cursor.com 로그인 → 세션 쿠키 자동 캡처(검증까지 수행)
@@ -24,7 +26,8 @@ Windows 시스템 트레이 전용 Cursor 사용량 모니터. 작업표시줄�
 
 ### 트레이 메뉴
 
-- **사용량**: 최근 Total/Auto/API 표시 (읽기 전용)
+- **플랜 / 갱신 / 남은 시간**: 구독 갱신 시각과 카운트다운
+- **사용률 / Spending / Included / On-Demand**: 현재 주기 상세 (읽기 전용)
 - **새로고침**: 즉시 다시 폴
 - **설정…**: 로그인/로그아웃, 쿠키 수동 입력, 폴 주기(기본 10초), 시작 프로그램 등록
 - **종료**
@@ -64,7 +67,7 @@ go build -ldflags="-s -w -H windowsgui" -o cursor-tray.exe ./cmd/cursor-tray
 cmd/cursor-tray/      진입점 (트레이 + 폴리 조립)
 internal/tray/        트레이 아이콘 렌더링(3x5 픽셀 폰트), 툴팁, 메뉴
 internal/poller/      10s 폴, 지수 백오프, 401 처리
-internal/cursorapi/   POST /api/dashboard/get-current-period-usage
+internal/cursorapi/   usage-summary + get-current-period-usage + get-plan-info
 internal/auth/        WebView2 로그인 + 쿠키 캡처(DevTools Network.getAllCookies)
 internal/settings/    설정 창 (HTML UI, Go 바인딩)
 internal/storage/     config + DPAPI(CryptProtectData)
